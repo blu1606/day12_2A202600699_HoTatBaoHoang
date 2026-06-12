@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { FASTAPI_BASE_URL } from "@/lib/api-config";
 
 export async function GET(request: Request) {
-  const fastapiBaseUrl = process.env.FASTAPI_BASE_URL || "http://127.0.0.1:8000";
+  const fastapiBaseUrl = FASTAPI_BASE_URL;
   const { searchParams } = new URL(request.url);
   const sessionId = searchParams.get("session_id");
   const list = searchParams.get("list");
