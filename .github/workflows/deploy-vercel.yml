@@ -1,11 +1,17 @@
-name: Deploy to Vercel
+name: Continuous Deployment (Vercel)
 
 on:
   push:
     branches:
       - main
     paths:
-      - '03-cloud-deployment/railway/**'
+      - '06-lab-complete/frontend/**'
+      - '.github/workflows/deploy-vercel.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '06-lab-complete/frontend/**'
       - '.github/workflows/deploy-vercel.yml'
 
 jobs:
@@ -18,9 +24,20 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
-      - name: Deploy to Vercel
+      - name: Deploy to Vercel (Production)
+        if: github.event_name == 'push'
         run: vercel --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: 03-cloud-deployment/railway
+        working-directory: 06-lab-complete/frontend
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy to Vercel (Preview)
+        if: github.event_name == 'pull_request'
+        run: vercel --yes --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: 06-lab-complete/frontend
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+

@@ -4,7 +4,6 @@
 Đây là cách KHÔNG NÊN làm. Dùng để so sánh với advanced/.
 Hãy đếm bao nhiêu vấn đề bạn tìm được trong file này.
 """
-import os
 
 from fastapi import FastAPI
 import uvicorn

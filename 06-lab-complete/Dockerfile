@@ -28,6 +28,12 @@ COPY --from=builder /root/.local /home/agent/.local
 # Copy application
 COPY app/ ./app/
 COPY utils/ ./utils/
+COPY tools/ ./tools/
+COPY providers/ ./providers/
+COPY artifacts/ ./artifacts/
+COPY company_policy/ ./company_policy/
+COPY data/ ./data/
+COPY chat.py agent.py env_loader.py versioning.py ./
 
 RUN chown -R agent:agent /app
 

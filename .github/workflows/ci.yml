@@ -1,0 +1,118 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  lint:
+    name: Lint & Code Style
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Ruff
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Lint with Ruff
+        run: ruff check .
+
+  production-readiness:
+    name: Check Production Readiness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Production Readiness Checker
+        run: python 06-lab-complete/check_production_ready.py
+
+  test-backend:
+    name: Run Backend Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r 06-lab-complete/requirements.txt
+
+      - name: Run Backend Tests
+        run: |
+          cd 06-lab-complete
+          python -m pytest
+
+  test-frontend:
+    name: Validate Next.js Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        run: npm install -g pnpm@10
+
+      - name: Install dependencies
+        working-directory: 06-lab-complete/frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Linter
+        working-directory: 06-lab-complete/frontend
+        run: pnpm run lint
+
+      - name: Run Build
+        working-directory: 06-lab-complete/frontend
+        run: pnpm run build
+
+  verify-docker-build:
+    name: Verify Docker Builds
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Backend Image (Verify)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./06-lab-complete
+          file: ./06-lab-complete/Dockerfile
+          push: false
+
+      - name: Build Frontend Image (Verify)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./06-lab-complete/frontend
+          file: ./06-lab-complete/frontend/Dockerfile
+          push: false
+
+

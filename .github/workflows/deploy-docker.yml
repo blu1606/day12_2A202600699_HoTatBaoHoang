@@ -1,0 +1,53 @@
+name: Deploy Docker Images to GHCR
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - '06-lab-complete/**'
+      - '.github/workflows/deploy-docker.yml'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set lower case owner name
+        run: |
+          echo "OWNER_LC=${OWNER,,}" >> ${GITHUB_ENV}
+        env:
+          OWNER: ${{ github.repository_owner }}
+
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./06-lab-complete
+          file: ./06-lab-complete/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ env.OWNER_LC }}/complete-agent-backend:latest
+            ghcr.io/${{ env.OWNER_LC }}/complete-agent-backend:${{ github.sha }}
+
+      - name: Build and Push Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./06-lab-complete/frontend
+          file: ./06-lab-complete/frontend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ env.OWNER_LC }}/complete-agent-frontend:latest
+            ghcr.io/${{ env.OWNER_LC }}/complete-agent-frontend:${{ github.sha }}

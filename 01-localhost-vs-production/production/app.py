@@ -9,7 +9,6 @@ So sánh với basic/app.py để thấy sự khác biệt:
   ✅ 0.0.0.0 binding (chạy được trong container)
   ✅ Port từ PORT env var (Railway/Render inject tự động)
 """
-import os
 import signal
 import logging
 import json
