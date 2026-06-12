@@ -8,7 +8,7 @@ import random
 
 MOCK_RESPONSES = {
     "default": [
-        "Đây là câu trả lời từ AI agent (mock). Trong production, đây sẽ là response từ OpenAI/Anthropic.",
+        "Đây là câu trả lời từ AI agent (mock). Trong production, đây sẽ là response từ OpenAI/Anthropic. test2",
         "Agent đang hoạt động tốt! (mock response) Hỏi thêm câu hỏi đi nhé.",
         "Tôi là AI agent được deploy lên cloud. Câu hỏi của bạn đã được nhận.",
     ],
