@@ -27,7 +27,6 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 # Copy necessary files
-COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
