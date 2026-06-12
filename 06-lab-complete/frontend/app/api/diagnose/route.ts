@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { FASTAPI_BASE_URL } from "@/lib/api-config";
+import { FASTAPI_BASE_URL, getHeaders } from "@/lib/api-config";
 
 export async function POST(request: Request) {
   const payload = await request.json();
@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   try {
     const response = await fetch(`${FASTAPI_BASE_URL}/api/v1/diagnose`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(payload),
     });
     const contentType = response.headers.get("content-type") ?? "";

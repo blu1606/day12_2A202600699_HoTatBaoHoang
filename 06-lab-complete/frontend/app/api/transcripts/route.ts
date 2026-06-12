@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { FASTAPI_BASE_URL } from "@/lib/api-config";
+import { FASTAPI_BASE_URL, getHeaders } from "@/lib/api-config";
 
 export async function GET(request: Request) {
   const fastapiBaseUrl = FASTAPI_BASE_URL;
@@ -19,6 +19,7 @@ export async function GET(request: Request) {
   try {
     const res = await fetch(url, {
       cache: "no-store",
+      headers: getHeaders(),
     });
     if (!res.ok) {
       return NextResponse.json(
