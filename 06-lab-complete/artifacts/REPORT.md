@@ -21,7 +21,7 @@ Agent có thể tìm tin web, đọc URL, tìm tweet theo tài khoản hoặc ch
 
 > URL: [https://railway-tau.vercel.app/u/0/app](https://railway-tau.vercel.app/u/0/app)
 >
-> - Ứng dụng Next.js Frontend và Backend (hoạt động ở chế độ Mock hoàn toàn) được deploy gộp chung trên nền tảng Vercel. Ứng dụng tự động phục vụ mock data cục bộ giúp chạy độc lập mà không cần backend API thực tế.
+> - Ứng dụng Next.js Frontend và Backend được deploy gộp chung trên nền tảng Vercel. Ứng dụng tự động phục vụ mock data cục bộ giúp chạy độc lập mà không cần backend API thực tế.
 
 ## A2. Tool agent có
 
