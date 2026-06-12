@@ -31,35 +31,25 @@ export function TraceRailInteractive({
 }) {
   const [liveTranscript, setLiveTranscript] = useState<any>(null);
 
-  // Listen for the latest live transcript from chat.py in real-time via Server-Sent Events (SSE)
+  // Fetch the latest transcript for the active session once when it changes (no continuous SSE polling)
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    let eventSource: EventSource | null = null;
-    try {
-      const url = activeSessionId 
-        ? `/api/transcripts/stream?session_id=${activeSessionId}`
-        : "/api/transcripts/stream";
-      eventSource = new EventSource(url);
-      eventSource.onmessage = (event) => {
-        try {
-          const json = JSON.parse(event.data);
-          if (json && !json.error) {
-            setLiveTranscript(json);
-          }
-        } catch (e) {
-          // ignore
-        }
-      };
-    } catch (e) {
-      // ignore
+    if (!activeSessionId) {
+      setLiveTranscript(null);
+      return;
     }
 
-    return () => {
-      if (eventSource) {
-        eventSource.close();
-      }
-    };
+    fetch(`/api/transcripts?session_id=${activeSessionId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && !data.error) {
+          setLiveTranscript(data);
+        } else {
+          setLiveTranscript(null);
+        }
+      })
+      .catch(() => {
+        setLiveTranscript(null);
+      });
   }, [activeSessionId]);
 
   // Retrieve current active trace details (fallback if no live transcript is running)
