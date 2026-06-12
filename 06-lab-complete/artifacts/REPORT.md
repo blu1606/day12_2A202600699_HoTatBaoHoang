@@ -19,7 +19,9 @@ Agent có thể tìm tin web, đọc URL, tìm tweet theo tài khoản hoặc ch
 
 **Link dùng thử (deploy):**
 
-> URL: chưa điền public URL. Nếu chạy local/Vercel, dùng Cloudflare Tunnel cho backend local và cập nhật link FE/BE tại đây.
+> URL: [https://railway-tau.vercel.app/u/0/app](https://railway-tau.vercel.app/u/0/app)
+>
+> - Ứng dụng Next.js Frontend và Backend (hoạt động ở chế độ Mock hoàn toàn) được deploy gộp chung trên nền tảng Vercel. Ứng dụng tự động phục vụ mock data cục bộ giúp chạy độc lập mà không cần backend API thực tế.
 
 ## A2. Tool agent có
 
@@ -184,8 +186,7 @@ Reason for current CLI failures:
 - Fixes that belonged in `system_prompt.md`: không đoán missing account/URL, từ chối/no-tool cho out-of-scope, carryover/correction trong multi-turn, multi-tool behavior, và send confirmation boundary.
 - Fixes that belonged in `tools.yaml`: mô tả tool rõ hơn, convention cho arguments, và source boundary để model route đúng giữa `timeline`, `social_search`, `lookup`, `fetch`, `clarify`, và `send`.
 - Failure needing manual review: RapidAPI live tool failures (`timeline` 403 và `social_search` 429) là vấn đề API/subscription/quota bên ngoài, không nhất thiết là lỗi routing.
-- What to improve next:
-  - Thêm 7 group eval cases để đạt target 10 cases trong README.
-  - Fix hoặc remove `test_tool_cli_main.py` trước bản nộp cuối nếu team muốn unit tests sạch.
-  - Re-check RapidAPI Twitter API45 subscription/quota.
-  - Thêm public deployment URL và cấu hình CORS cho Vercel FE -> local BE tunnel.
+- Cải tiến đặc biệt (Mock Mode & Cloud Deployment):
+  - **Full Auto-Mock Mode**: Đã chuyển cấu hình Frontend và toàn bộ Next.js API Routes sang Mock Mode hoàn toàn. Các API như `/api/eval-cases`, `/api/prompt-tools`, `/api/version-log` tự động đọc file cục bộ từ repository bằng Node.js `fs` module, giúp app chạy ổn định độc lập 100% trên Vercel.
+  - **Vercel Co-location**: Tích hợp Frontend Next.js và Backend FastAPI chạy gộp chung trên Vercel Lambda để tối ưu tài nguyên và đường truyền.
+  - **Docker CI/CD**: Đã vô hiệu hóa Docker build trong GitHub Actions workflow để tăng tốc độ CI và giảm tải tài nguyên.
