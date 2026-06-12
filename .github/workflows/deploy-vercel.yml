@@ -27,6 +27,11 @@ jobs:
       - name: Install pnpm
         run: npm install --global pnpm@9
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
       # ─────────────────────────────────────────────────────────
       # Production Deployment (Pushes to main)
       # ─────────────────────────────────────────────────────────
