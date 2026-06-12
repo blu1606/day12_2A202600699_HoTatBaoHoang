@@ -20,7 +20,15 @@ from pydantic import BaseModel, Field
 import uvicorn
 
 # Ensure root folder is in Python path for imports
-BASE_DIR = Path(__file__).resolve().parent.parent
+def find_base_dir() -> Path:
+    current = Path(__file__).resolve().parent
+    for _ in range(4):
+        if (current / "artifacts").exists() or (current / "app").exists():
+            return current
+        current = current.parent
+    return Path(__file__).resolve().parent.parent
+
+BASE_DIR = find_base_dir()
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
@@ -216,6 +224,29 @@ def ready():
     if not _is_ready:
         raise HTTPException(503, "Not ready")
     return {"ready": True}
+
+@app.get("/api/v1/debug-paths", tags=["Operations"])
+def debug_paths():
+    import os
+    current_file = __file__
+    resolved_file = str(Path(__file__).resolve())
+    base_dir = str(BASE_DIR)
+    
+    file_list = []
+    try:
+        if Path(base_dir).exists():
+            file_list = os.listdir(base_dir)
+    except Exception as e:
+        file_list = [f"Error: {e}"]
+        
+    return {
+        "current_file": current_file,
+        "resolved_file": resolved_file,
+        "base_dir": base_dir,
+        "base_dir_exists": Path(base_dir).exists(),
+        "files_in_base_dir": file_list,
+        "env_variables": {k: v for k, v in os.environ.items() if "KEY" not in k and "SECRET" not in k and "TOKEN" not in k}
+    }
 
 @app.get("/api/v1/runs")
 async def get_runs(_key: str = Depends(verify_api_key)):

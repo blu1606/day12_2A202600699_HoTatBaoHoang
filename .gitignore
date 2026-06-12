@@ -36,3 +36,4 @@ data/
 !06-lab-complete/data/
 !06-lab-complete/frontend/data/
 volumes/
+.next/

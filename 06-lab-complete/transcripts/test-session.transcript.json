@@ -40,7 +40,16 @@
       "assistant_text": "Based on my analysis, you should review loop variables.",
       "tool_events": [],
       "ended_at": "2026-06-12T16:41:16.539969"
+    },
+    {
+      "turn_index": 5,
+      "started_at": "2026-06-12T20:07:43.996578",
+      "user": "What is wrong with my code?",
+      "status": "answered",
+      "assistant_text": "Based on my analysis, you should review loop variables.",
+      "tool_events": [],
+      "ended_at": "2026-06-12T20:07:43.996578"
     }
   ],
-  "updated_at": "2026-06-12T16:41:16.539969"
+  "updated_at": "2026-06-12T20:07:43.996578"
 }

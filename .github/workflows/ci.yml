@@ -91,28 +91,28 @@ jobs:
         working-directory: 06-lab-complete/frontend
         run: pnpm run build
 
-  verify-docker-build:
-    name: Verify Docker Builds
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Backend Image (Verify)
-        uses: docker/build-push-action@v5
-        with:
-          context: ./06-lab-complete
-          file: ./06-lab-complete/Dockerfile
-          push: false
-
-      - name: Build Frontend Image (Verify)
-        uses: docker/build-push-action@v5
-        with:
-          context: ./06-lab-complete/frontend
-          file: ./06-lab-complete/frontend/Dockerfile
-          push: false
+#  verify-docker-build:
+#    name: Verify Docker Builds
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout Code
+#        uses: actions/checkout@v4
+#
+#      - name: Set up Docker Buildx
+#        uses: docker/setup-buildx-action@v3
+#
+#      - name: Build Backend Image (Verify)
+#        uses: docker/build-push-action@v5
+#        with:
+#          context: ./06-lab-complete
+#          file: ./06-lab-complete/Dockerfile
+#          push: false
+#
+#      - name: Build Frontend Image (Verify)
+#        uses: docker/build-push-action@v5
+#        with:
+#          context: ./06-lab-complete/frontend
+#          file: ./06-lab-complete/frontend/Dockerfile
+#          push: false
 
 

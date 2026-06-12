@@ -1,26 +1,70 @@
 import { NextResponse } from "next/server";
-import { FASTAPI_BASE_URL, getHeaders } from "@/lib/api-config";
+import fs from "fs";
+import path from "path";
+
+function findArtifactsDirectory(): string | null {
+  const pathsToTry = [
+    path.join(process.cwd(), /*turbopackIgnore: true*/ "artifacts"),
+    path.join(process.cwd(), /*turbopackIgnore: true*/ "../artifacts"),
+    path.join(process.cwd(), /*turbopackIgnore: true*/ "06-lab-complete/artifacts"),
+    path.join("/var/task", /*turbopackIgnore: true*/ "artifacts"),
+    path.join("/var/task", /*turbopackIgnore: true*/ "06-lab-complete/artifacts"),
+  ];
+
+  for (const p of pathsToTry) {
+    if (fs.existsSync(p) && fs.lstatSync(p).isDirectory()) {
+      return p;
+    }
+  }
+  return null;
+}
 
 export async function GET() {
-  const fastapiBaseUrl = FASTAPI_BASE_URL;
-  try {
-    const res = await fetch(`${fastapiBaseUrl}/api/v1/prompt-tools`, {
-      cache: "no-store",
-      headers: getHeaders(),
-    });
-    if (!res.ok) {
-      return NextResponse.json(
-        { error: "BACKEND_ERROR", details: `Backend returned status ${res.status}` },
-        { status: 502 }
-      );
-    }
-    const data = await res.json();
-    return NextResponse.json(data);
-  } catch (error: any) {
-    console.error("Failed to fetch prompt-tools from backend:", error);
+  const artifactsDir = findArtifactsDirectory();
+  if (!artifactsDir) {
+    console.error("Artifacts directory not found in paths.");
     return NextResponse.json(
-      { error: "BACKEND_UNAVAILABLE" },
-      { status: 502 }
+      { error: "ARTIFACTS_DIR_NOT_FOUND", details: "Failed to locate artifacts directory" },
+      { status: 500 }
     );
   }
+
+  let systemPrompt = "";
+  try {
+    const sysPromptPath = path.join(artifactsDir, "system_prompt.md");
+    if (fs.existsSync(sysPromptPath)) {
+      systemPrompt = fs.readFileSync(sysPromptPath, "utf-8");
+    }
+  } catch {}
+
+  let toolsYaml = "";
+  try {
+    const toolsPath = path.join(artifactsDir, "tools.yaml");
+    if (fs.existsSync(toolsPath)) {
+      toolsYaml = fs.readFileSync(toolsPath, "utf-8");
+    }
+  } catch {}
+
+  let reportMd = "";
+  try {
+    const reportPath = path.join(artifactsDir, "REPORT.md");
+    if (fs.existsSync(reportPath)) {
+      reportMd = fs.readFileSync(reportPath, "utf-8");
+    }
+  } catch {}
+
+  let runbookMd = "";
+  try {
+    const runbookPath = path.join(artifactsDir, "PERSON1_RUNBOOK.md");
+    if (fs.existsSync(runbookPath)) {
+      runbookMd = fs.readFileSync(runbookPath, "utf-8");
+    }
+  } catch {}
+
+  return NextResponse.json({
+    systemPrompt,
+    toolsYaml,
+    reportMd,
+    runbookMd,
+  });
 }

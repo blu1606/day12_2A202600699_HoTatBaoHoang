@@ -1,11 +1,7 @@
 name: Deploy Docker Images to GHCR
 
 on:
-  push:
-    branches: [ "main" ]
-    paths:
-      - '06-lab-complete/**'
-      - '.github/workflows/deploy-docker.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
