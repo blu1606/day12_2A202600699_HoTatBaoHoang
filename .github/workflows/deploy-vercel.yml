@@ -24,6 +24,9 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
+      - name: Install pnpm
+        run: npm install --global pnpm@9
+
       # ─────────────────────────────────────────────────────────
       # Production Deployment (Pushes to main)
       # ─────────────────────────────────────────────────────────
