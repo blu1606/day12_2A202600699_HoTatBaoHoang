@@ -27,7 +27,6 @@ COPY --from=builder /root/.local /home/agent/.local
 
 # Copy application
 COPY app/ ./app/
-COPY utils/ ./utils/
 COPY tools/ ./tools/
 COPY providers/ ./providers/
 COPY artifacts/ ./artifacts/
