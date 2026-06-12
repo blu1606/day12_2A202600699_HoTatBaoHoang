@@ -5,10 +5,21 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+def get_transcripts_dir(base_dir: Path) -> Path:
+    if os.getenv("VERCEL"):
+        t_dir = Path("/tmp/transcripts")
+    else:
+        t_dir = base_dir / "transcripts"
+    if not t_dir.exists():
+        try:
+            t_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            print(f"Error creating transcripts directory {t_dir}: {e}")
+    return t_dir
+
 def list_transcripts(base_dir: Path) -> list[dict]:
-    transcripts_dir = base_dir / "transcripts"
+    transcripts_dir = get_transcripts_dir(base_dir)
     if not transcripts_dir.exists():
-        transcripts_dir.mkdir(parents=True, exist_ok=True)
         return []
         
     session_list = []
@@ -65,7 +76,7 @@ def list_transcripts(base_dir: Path) -> list[dict]:
     return session_list
 
 def get_transcript(base_dir: Path, session_id: str) -> dict | None:
-    transcripts_dir = base_dir / "transcripts"
+    transcripts_dir = get_transcripts_dir(base_dir)
     file_path = transcripts_dir / f"{session_id}.transcript.json"
     if not file_path.exists():
         return None
@@ -79,9 +90,7 @@ def get_transcript(base_dir: Path, session_id: str) -> dict | None:
         return None
 
 def save_transcript(base_dir: Path, session_id: str, transcript_data: dict) -> bool:
-    transcripts_dir = base_dir / "transcripts"
-    if not transcripts_dir.exists():
-        transcripts_dir.mkdir(parents=True, exist_ok=True)
+    transcripts_dir = get_transcripts_dir(base_dir)
         
     file_path = transcripts_dir / f"{session_id}.transcript.json"
     try:
