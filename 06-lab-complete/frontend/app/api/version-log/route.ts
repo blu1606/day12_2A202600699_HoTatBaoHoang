@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { FASTAPI_BASE_URL } from "@/lib/api-config";
 
 export async function GET() {
-  const fastapiBaseUrl = process.env.FASTAPI_BASE_URL || "http://127.0.0.1:8000";
+  const fastapiBaseUrl = FASTAPI_BASE_URL;
   try {
     const res = await fetch(`${fastapiBaseUrl}/api/v1/version-log`, {
       cache: "no-store",

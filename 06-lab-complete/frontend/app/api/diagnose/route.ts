@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-
-const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL ?? "http://127.0.0.1:8000";
+import { FASTAPI_BASE_URL } from "@/lib/api-config";
 
 export async function POST(request: Request) {
   const payload = await request.json();
