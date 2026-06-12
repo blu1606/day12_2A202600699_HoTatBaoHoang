@@ -43,7 +43,7 @@ export function ChatPanelInteractive({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [isMockMode, setIsMockMode] = useState(false);
+  const [isMockMode, setIsMockMode] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const currentSessionIdRef = useRef(activeSessionId);
 
@@ -504,18 +504,12 @@ export function ChatPanelInteractive({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsMockMode(!isMockMode)}
-            className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-mono text-[10px] font-bold shadow-sm transition-all cursor-pointer ${
-              isMockMode
-                ? "border-amber-500/30 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20"
-                : "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
-            }`}
-            type="button"
+          <div
+            className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 font-mono text-[10px] font-bold text-amber-600 shadow-sm"
           >
-            <span className={`size-1.5 rounded-full ${isMockMode ? "bg-amber-500 animate-pulse" : "bg-emerald-500 animate-pulse"}`} />
-            {isMockMode ? "Sandbox Mock Mode" : "Live API Mode"}
-          </button>
+            <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" />
+            Sandbox Mock Mode
+          </div>
           <div className="flex items-center gap-2 rounded-full border border-[rgba(11,9,7,0.12)] bg-[#fefcf5] px-3 py-1.5 font-mono text-[10px] text-[rgba(11,9,7,0.5)] font-semibold shadow-sm">
             <PanelRight className="size-3.5 text-[#2677ff]" />
             /interactive
