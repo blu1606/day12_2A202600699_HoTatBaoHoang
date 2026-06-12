@@ -4,11 +4,11 @@ import path from "path";
 
 function findArtifactsDirectory(): string | null {
   const pathsToTry = [
-    path.join(process.cwd(), "artifacts"),
-    path.join(process.cwd(), "..", "artifacts"),
-    path.join(process.cwd(), "06-lab-complete", "artifacts"),
-    path.join("/var/task", "artifacts"),
-    path.join("/var/task", "06-lab-complete", "artifacts"),
+    path.join(process.cwd(), /*turbopackIgnore: true*/ "artifacts"),
+    path.join(process.cwd(), /*turbopackIgnore: true*/ "../artifacts"),
+    path.join(process.cwd(), /*turbopackIgnore: true*/ "06-lab-complete/artifacts"),
+    path.join("/var/task", /*turbopackIgnore: true*/ "artifacts"),
+    path.join("/var/task", /*turbopackIgnore: true*/ "06-lab-complete/artifacts"),
   ];
 
   for (const p of pathsToTry) {

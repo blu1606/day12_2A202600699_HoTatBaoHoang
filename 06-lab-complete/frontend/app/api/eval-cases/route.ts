@@ -4,11 +4,11 @@ import path from "path";
 
 function findDataDirectory(): string | null {
   const pathsToTry = [
-    path.join(process.cwd(), "data"),
-    path.join(process.cwd(), "..", "data"),
-    path.join(process.cwd(), "06-lab-complete", "data"),
-    path.join("/var/task", "data"),
-    path.join("/var/task", "06-lab-complete", "data"),
+    path.join(process.cwd(), /*turbopackIgnore: true*/ "data"),
+    path.join(process.cwd(), /*turbopackIgnore: true*/ "../data"),
+    path.join(process.cwd(), /*turbopackIgnore: true*/ "06-lab-complete/data"),
+    path.join("/var/task", /*turbopackIgnore: true*/ "data"),
+    path.join("/var/task", /*turbopackIgnore: true*/ "06-lab-complete/data"),
   ];
 
   for (const p of pathsToTry) {
@@ -34,7 +34,7 @@ export async function GET() {
     const files = fs.readdirSync(dataDir);
     
     for (const filename of files) {
-      if (!filename.endswith(".json")) {
+      if (!filename.endsWith(".json")) {
         continue;
       }
       
