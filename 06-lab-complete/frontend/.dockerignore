@@ -8,5 +8,4 @@ build/
 !.env.example
 *.md
 .DS_Store
-pnpm-lock.yaml
 pnpm-workspace.yaml
