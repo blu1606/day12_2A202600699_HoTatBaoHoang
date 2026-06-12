@@ -33,4 +33,6 @@ Thumbs.db
 
 # ── Docker volumes (local dev) ─────────────────────��──────
 data/
+!06-lab-complete/data/
+!06-lab-complete/frontend/data/
 volumes/

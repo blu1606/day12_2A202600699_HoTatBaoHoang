@@ -82,23 +82,134 @@ graph TD
 ## Part 3: Cloud Deployment
 
 ### Exercise 3.1: Railway deployment (Vercel alternative used due to Railway workspace restriction)
-- **URL:** https://railway-tau.vercel.app
-- **Screenshot:** (Vercel deployment screenshot captured under artifacts as `vercel_root_response`)
+- **URL:** https://railway-tau.vercel.app/
+- **Screenshot:** ![Vercel Deploy](./image.png)
 
 
 ---
 
 ## Part 4: API Security
 
-### Exercise 4.1-4.3: Test results
-*[Paste test outputs ở các phần sau]*
+### Exercise 4.1: API Key authentication
+- **API key được check ở đâu?**
+  - API key được kiểm tra tại hàm dependency `verify_api_key()` (dòng 39-54 trong `04-api-gateway/develop/app.py`). Hàm này được định nghĩa như một dependency của FastAPI và được inject trực tiếp vào endpoint `/ask` thông qua dependency injection: `_key: str = Depends(verify_api_key)`.
+  - Giá trị của API key được trích xuất từ HTTP header có tên `X-API-Key` thông qua đối tượng `APIKeyHeader(name="X-API-Key", auto_error=False)`.
+
+- **Điều gì xảy ra nếu sai key?**
+  - Nếu thiếu API key (không truyền header `X-API-Key`), ứng dụng sẽ trả về mã lỗi HTTP **401 Unauthorized** kèm thông điệp: `"Missing API key. Include header: X-API-Key: <your-key>"`.
+  - Nếu truyền sai API key (không khớp với biến môi trường `AGENT_API_KEY`), ứng dụng sẽ trả về mã lỗi HTTP **403 Forbidden** kèm thông điệp: `"Invalid API key."`.
+
+- **Làm sao rotate key?**
+  - Khóa bảo mật được tải động từ biến môi trường `AGENT_API_KEY` (thông qua `os.getenv("AGENT_API_KEY")`).
+  - Để rotate (xoay vòng/đổi) API key, ta chỉ cần thay đổi giá trị của biến môi trường `AGENT_API_KEY` trên cấu hình hosting (như Vercel, Railway, Render, hoặc file `.env`), sau đó khởi động lại dịch vụ (restart/redeploy). Không cần phải thay đổi mã nguồn.
+
+### Exercise 4.3: Rate limiting
+- **Algorithm nào được dùng?**
+  - Thuật toán **Sliding Window Counter** (Cửa sổ trượt) được sử dụng.
+  - Mỗi user có một hàng đợi double-ended queue (`deque`) chứa các timestamp của các request gần nhất. Khi có request mới, các timestamp cũ vượt quá cửa sổ trượt (60 giây) sẽ bị loại bỏ khỏi hàng đợi (`window.popleft()`), sau đó độ dài của hàng đợi được so sánh với giới hạn để quyết định xem có cho phép request đi tiếp hay không.
+
+- **Limit là bao nhiêu requests/minute?**
+  - Người dùng thông thường (`user` / student): **10 requests/minute**.
+  - Người dùng quản trị (`admin` / teacher): **100 requests/minute**.
+
+- **Làm sao bypass limit cho admin?**
+  - Hệ thống không bỏ qua hoàn toàn giới hạn đối với Admin mà áp dụng **Phân cấp Giới hạn (Tiered Limits)** dựa trên vai trò (role) được trích xuất từ JWT token.
+  - Trong `app.py` dòng 140:
+    ```python
+    limiter = rate_limiter_admin if role == "admin" else rate_limiter_user
+    ```
+    Nếu là tài khoản `admin`, hệ thống sẽ áp dụng đối tượng `rate_limiter_admin` với giới hạn nới rộng lên tới **100 requests/minute** (thay vì 10 requests/minute của user thường).
 
 ### Exercise 4.4: Cost guard implementation
-*[Giải thích cách tiếp cận cho Cost Guard]*
+Dưới đây là phần code cài đặt hàm `check_budget` sử dụng Redis để lưu trữ và quản lý hạn mức chi tiêu hàng tháng (budget) của từng user:
+
+```python
+import redis
+from datetime import datetime
+
+# Khởi tạo kết nối tới Redis
+r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+
+def check_budget(user_id: str, estimated_cost: float) -> bool:
+    """
+    Kiểm tra hạn mức chi tiêu của người dùng trong tháng hiện tại.
+    Trả về True nếu còn budget, False nếu vượt quá.
+    """
+    # 1. Định nghĩa key theo định dạng budget:user_id:YYYY-MM để tự động reset theo tháng
+    month_key = datetime.now().strftime("%Y-%m")
+    key = f"budget:{user_id}:{month_key}"
+    
+    # 2. Lấy số tiền đã tiêu trong tháng của user từ Redis
+    current = float(r.get(key) or 0)
+    
+    # 3. Kiểm tra xem nếu cộng thêm chi phí ước tính của request hiện tại có vượt $10/tháng không
+    if current + estimated_cost > 10.0:
+        return False
+    
+    # 4. Nếu chưa vượt quá, ghi nhận chi phí mới bằng cách cộng dồn trong Redis
+    r.incrbyfloat(key, estimated_cost)
+    
+    # 5. Đặt thời gian hết hạn (TTL) là 32 ngày để key tự động được dọn dẹp sau khi sang tháng mới
+    r.expire(key, 32 * 24 * 3600)  # 32 days
+    
+    return True
+```
+
+**Giải thích cách tiếp cận:**
+1. **Thiết kế Key dạng `budget:{user_id}:{YYYY-MM}`**: Việc thêm thông tin năm-tháng vào key giúp tự động tách biệt dữ liệu chi tiêu giữa các tháng khác nhau, qua đó đạt được cơ chế tự động reset ngân sách khi bắt đầu tháng mới mà không cần chạy các cronjob xóa dữ liệu thủ công.
+2. **Sử dụng lệnh `r.incrbyfloat`**: Đây là thao tác nguyên tử (atomic operation) giúp cập nhật giá trị chi phí số thực một cách an toàn kể cả khi có nhiều request đồng thời từ một user gửi đến nhiều instance của agent (tránh race condition).
+3. **Đặt TTL 32 ngày**: Bằng việc cấu hình `expire` sau mỗi lần cập nhật, các key cũ sẽ tự động bị xóa khỏi Redis sau khi tháng kết thúc, giúp tiết kiệm bộ nhớ RAM cho hệ thống.
 
 ---
 
 ## Part 5: Scaling & Reliability
 
 ### Exercise 5.1-5.5: Implementation notes
-*[Ghi chú kết quả cài đặt và test stateless, graceful shutdown, health/ready probes]*
+
+#### 1. Cài đặt Probes (Liveness & Readiness Probes)
+* **Liveness Probe (`/health`)**: Trả về trạng thái hoạt động tổng thể của tiến trình (`status: ok` hoặc `degraded`). Nó kiểm tra tài nguyên hệ thống (CPU, RAM qua `psutil`). Nếu container bị treo hoặc hết RAM (>90%), endpoint này sẽ fail, thông báo cho cloud provider restart lại container.
+* **Readiness Probe (`/ready`)**: Kiểm tra xem ứng dụng đã sẵn sàng xử lý traffic chưa. Trả về mã lỗi `503 Service Unavailable` nếu biến trạng thái `_is_ready` là `False` (đang khởi động hoặc đang tắt). Load balancer sẽ dừng chuyển traffic tới instance này cho tới khi nó sẵn sàng.
+
+#### 2. Graceful Shutdown (Tắt máy an toàn)
+* Bắt tín hiệu hệ thống `SIGTERM` và `SIGINT` thông qua module `signal` của Python.
+* Khi có tín hiệu tắt container, ứng dụng sẽ chuyển `_is_ready = False` ngay lập tức để Readiness probe báo `503` nhằm ngắt định tuyến traffic mới từ Load Balancer.
+* Sử dụng vòng lặp kiểm tra biến `_in_flight_requests` để đợi các request hiện tại đang xử lý dở dang được hoàn tất (tối đa 30 giây) trước khi đóng các kết nối Database/Redis và kết thúc tiến trình sạch sẽ (`sys.exit(0)`).
+
+#### 3. Stateless Design (Thiết kế phi trạng thái)
+* Không lưu trữ lịch sử trò chuyện (`conversation_history`) hay session trong RAM của container (anti-pattern vì gây lệch dữ liệu khi scale ra nhiều instance hoặc khi container bị restart).
+* Sử dụng Redis làm cơ sở dữ liệu tập trung lưu trữ trạng thái. Các câu lệnh `r.lrange()` và `r.rpush()` được dùng để đọc/ghi lịch sử hội thoại của user. Nhờ đó, bất cứ instance nào sau Load Balancer đều có thể xử lý request tiếp theo của user mà không bị mất dữ liệu ngữ cảnh.
+* **Câu hỏi trong CODE_LAB.md (Exercise 5.3): Tại sao khi scale ra nhiều instances ta không nên dùng memory cục bộ để lưu lịch sử hội thoại?**
+  * **Trả lời**: Vì mỗi instance chạy độc lập và có vùng nhớ RAM riêng biệt. Bộ cân bằng tải (Load Balancer) sẽ phân phối ngẫu nhiên các request của cùng một người dùng tới các instances khác nhau. Nếu lưu history trong RAM cục bộ, instance này sẽ không thể biết được lịch sử trò chuyện được xử lý trước đó bởi instance kia, dẫn tới việc mất ngữ cảnh trò chuyện và hoạt động sai lệch. Việc lưu trữ lịch sử hội thoại trong Redis dùng chung giải quyết triệt để vấn đề này.
+
+#### 4. Load Balancing với Nginx
+* Định cấu hình Nginx làm Reverse Proxy nhận lưu lượng từ cổng public `80` và phân phối vòng tròn (Round Robin) đến 3 instances `agent` khác nhau chạy trong mạng nội bộ.
+* Nếu một instance bị lỗi, Nginx sẽ tự động phát hiện thông qua liveness probe và chuyển traffic qua 2 instances còn lại, tăng tính sẵn sàng cao (High Availability) cho hệ thống.
+
+---
+
+## Part 6: Final Project
+
+### Exercise 6.1: Complete Production Agent Integration
+* **Phương án thực hiện**:
+  * Đã tích hợp thành công Agent từ Day 04 có giao diện Trace UI (Next.js) vào thư mục `06-lab-complete`.
+  * Hợp nhất tất cả các tiêu chí của ứng dụng chạy Production: cấu hình 12-factor qua Pydantic Settings, xác thực API Key (`X-API-Key`), cơ chế giới hạn tần suất gọi API (Rate Limiting), kiểm soát chi phí LLM (Cost Guard), Endpoint kiểm tra sức khỏe (`/health` và `/ready`), tự động ghi log có cấu trúc (Structured JSON Logging) và tắt máy an toàn giải phóng kết nối (Graceful Shutdown).
+  * Chạy script kiểm tra `python check_production_ready.py` đạt điểm số tối đa **20/20 (100% checks passed)**.
+  * Tích hợp thành công cấu hình Docker Compose khởi chạy đồng thời:
+    * `agent`: FastAPI backend (xử lý logic suy luận agent và các tool).
+    * `frontend`: Next.js web application (hiển thị giao diện trực quan và trace log suy nghĩ của model).
+    * `redis`: Lưu trữ cache lịch sử trò chuyện và giới hạn cuộc gọi.
+
+### Exercise 6.2: Bonus Point - CI/CD Pipeline
+* **Thiết lập CI/CD**:
+  * **Pipeline CI (`.github/workflows/ci.yml`)**: Tự động kích hoạt khi có Push hoặc Pull Request vào nhánh `main`. Quy trình kiểm thử toàn diện gồm:
+    1. Kiểm tra chuẩn mã nguồn (Ruff Linter).
+    2. Chạy bộ kiểm thử tự động của FastAPI Backend (`pytest` + `httpx` TestClient).
+    3. Xác thực code Frontend Next.js build thành công (`pnpm run lint` & `pnpm run build`).
+    4. Verify Docker build để đảm bảo cả backend Dockerfile và frontend Dockerfile biên dịch thành công.
+    5. Chạy `check_production_ready.py` kiểm tra 20/20 tiêu chuẩn Production.
+  * **Pipeline CD Vercel (`.github/workflows/deploy-vercel.yml`)**: Tự động build và deploy dự án giao diện frontend Next.js (`06-lab-complete/frontend`) lên Cloud Vercel.
+  * **Pipeline CD Docker (`.github/workflows/deploy-docker.yml`)**: Tự động đóng gói và đẩy (push) production-ready Docker images của cả Backend và Frontend lên **GitHub Container Registry (GHCR)** dưới dạng package khi code được trộn (merge) vào nhánh `main`. Các gói image được lưu tại:
+    * `ghcr.io/<github_owner>/complete-agent-backend:latest`
+    * `ghcr.io/<github_owner>/complete-agent-frontend:latest`
+  * **Đường dẫn deploy (Vercel)**: https://railway-tau.vercel.app/
+

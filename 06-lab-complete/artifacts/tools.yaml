@@ -1,0 +1,247 @@
+# starter_v0 tool declarations.
+# Keep tool names in sync with tools/__init__.py and eval expected calls.
+tools:
+  # ---------------- Core tools ----------------
+  - name: clarify
+    description: "Ask the user one concise follow-up question when required information is missing, ambiguous, or a destructive/write action needs confirmation. Use for missing account handles, missing URLs, missing topics, or unconfirmed send/post/publish requests."
+    parameters:
+      type: object
+      properties:
+        question:
+          type: string
+          default: ""
+          description: "The exact clarification or confirmation question to ask the user."
+        response_type:
+          type: string
+          enum: [text, yes_no, choice]
+          default: "text"
+          description: "Use text for missing details, yes_no for send/post/publish confirmation, and choice only when offering specific options."
+        options:
+          type: array
+          default: []
+          items:
+            type: string
+          description: "Optional choices when response_type is choice."
+      required: [question]
+
+  - name: timeline
+    description: "Fetch recent tweets/posts from one specific Twitter/X account. Use when the user asks for tweets from a named person or handle. screenname is the handle without @; map common names such as Sam Altman=sama, Elon Musk=elonmusk, Andrej Karpathy=karpathy."
+    parameters:
+      type: object
+      properties:
+        screenname:
+          type: string
+          default: ""
+          description: "Twitter/X handle without @, for example sama, elonmusk, or karpathy."
+        limit:
+          type: integer
+          default: 5
+          description: "Number of posts to fetch. Extract explicit numbers from the user; default to 5 only if unspecified."
+      required: [screenname]
+
+  - name: social_search
+    description: "Search Twitter/X posts by topic or keyword. Use when the user asks what people are saying about a topic, asks for tweets about a topic, or mentions Twitter/X without naming one specific account."
+    parameters:
+      type: object
+      properties:
+        query:
+          type: string
+          default: ""
+          description: "Concise topic or keyword to search for, for example GPT-5, OpenAI, or AI."
+        search_type:
+          type: string
+          enum: [Latest, Top]
+          default: "Latest"
+          description: "Use Top for popular/top/pho bien requests; use Latest for latest/recent/default."
+        limit:
+          type: integer
+          default: 5
+          description: "Number of posts to return. Extract explicit numbers when present."
+      required: [query]
+
+  - name: lookup
+    description: "Search the web for general information, current news, or recent events when no specific URL is provided. Use topic=news for news/current-event requests; use timeframe=day for today/hom nay, week for this week/tuan nay, month for this month, year for this year."
+    parameters:
+      type: object
+      properties:
+        query:
+          type: string
+          default: ""
+          description: "Concise web search query. Keep only the main topic, for example AI, robotics, or OpenAI."
+        topic:
+          type: string
+          enum: [general, news]
+          default: "general"
+          description: "news for current news/current events; general otherwise."
+        timeframe:
+          type: string
+          enum: [day, week, month, year]
+          default: "week"
+          description: "day=today, week=this week, month=this month, year=this year."
+        max_results:
+          type: integer
+          default: 5
+          description: "Maximum number of web results."
+      required: [query]
+
+  - name: fetch
+    description: "Read or summarize the content of a specific URL supplied by the user. Use this instead of lookup whenever the request includes an explicit URL."
+    parameters:
+      type: object
+      properties:
+        url:
+          type: string
+          default: ""
+          description: "The exact URL provided by the user."
+      required: [url]
+
+  - name: format
+    description: "Format already available items into a markdown digest. Use only when the user provides items or after relevant tool results already exist in context; do not use for searching or fetching."
+    parameters:
+      type: object
+      properties:
+        items:
+          type: array
+          default: []
+          description: "List of items to format."
+          items:
+            type: object
+            properties:
+              title: {type: string}
+              url: {type: string}
+              source: {type: string}
+              summary: {type: string}
+              section: {type: string}
+        template:
+          type: string
+          enum: [brief, sections, bullets, thread, daily_ai_vn]
+          default: "sections"
+          description: "Output style."
+        headline:
+          type: string
+          default: ""
+          description: "Optional digest headline."
+      required: [items, template]
+
+  - name: source_check
+    description: "Check a list of research items for source hygiene before citation, publication, or reporting. Use when the user asks to verify source quality, duplicate links, independent source diversity, missing source labels, invalid URLs, or whether gathered items are ready to cite/publish."
+    parameters:
+      type: object
+      properties:
+        items:
+          type: array
+          default: []
+          description: "Research items to check. Each item can include title, url, and source."
+          items:
+            type: object
+            properties:
+              title: {type: string}
+              url: {type: string}
+              source: {type: string}
+        min_sources:
+          type: integer
+          default: 2
+          description: "Minimum independent source domains expected before recommendation is ok."
+      required: [items]
+
+  # ---------------- Bonus tools ----------------
+  - name: send
+    description: "Send text to the configured Telegram channel. This is a side-effect action. Never call unless the latest user turn explicitly confirmed sending/posting/publishing; otherwise use clarify with response_type=yes_no."
+    parameters:
+      type: object
+      properties:
+        text:
+          type: string
+          default: ""
+          description: "Text to send."
+        confirmed:
+          type: boolean
+          default: false
+          description: "Must be true only after explicit user confirmation."
+      required: [text]
+
+  - name: policy
+    description: "Search the local company policy markdown knowledge base. Use for questions about internal AI research rules, citation rules, data privacy, external publishing, or tool usage policy."
+    parameters:
+      type: object
+      properties:
+        query:
+          type: string
+          default: ""
+          description: "Policy search query."
+        policy_area:
+          type: string
+          enum: [all, ai_research, source_citation, data_privacy, external_publishing, tool_usage]
+          default: "all"
+          description: "Policy category to search."
+        top_k:
+          type: integer
+          default: 3
+          description: "Number of policy snippets."
+      required: [query]
+
+  - name: papers
+    description: "Search arXiv for academic papers. Use when the user asks for papers, research literature, arXiv results, or academic sources."
+    parameters:
+      type: object
+      properties:
+        query:
+          type: string
+          default: ""
+          description: "Academic paper search query."
+        max_results:
+          type: integer
+          default: 5
+          description: "Number of paper results."
+        sort_by:
+          type: string
+          enum: [relevance, lastUpdatedDate, submittedDate]
+          default: "relevance"
+          description: "Sort order."
+      required: [query]
+
+  - name: paper_text
+    description: "Download/extract local text from a specific arXiv paper by arXiv ID or URL. Use after the user provides a paper ID/URL or asks to read a specific arXiv paper."
+    parameters:
+      type: object
+      properties:
+        arxiv_url:
+          type: string
+          default: ""
+          description: "arXiv ID or URL."
+        max_pages:
+          type: integer
+          default: 5
+          description: "Maximum pages to extract."
+        max_chars:
+          type: integer
+          default: 8000
+          description: "Maximum characters to return."
+      required: [arxiv_url]
+
+  - name: weather_by_region
+    description: "Get current weather and short-term forecasts for a specified location. Uses clarify if the location is missing."
+    parameters:
+      type: object
+      properties:
+        region:
+          type: string
+          default: ""
+          description: "The specific location/region (e.g., city name, state, or country) to get weather and forecast for."
+      required: [region]
+
+  - name: trend_analyzer
+    description: "Analyze posts or articles to identify trending topics, keywords, and sentiment. Can process data collected from social_search, timeline, lookup, or fetch."
+    parameters:
+      type: object
+      properties:
+        data:
+          description: "The collected data payload (from lookup, fetch, timeline, or social_search) to analyze."
+      required: [data]
+
+  - name: list_tools
+    description: "List all active registered tools, their descriptions, parameters, and metadata. Use this when you want to discover the available tools in the system."
+    parameters:
+      type: object
+      properties: {}
+

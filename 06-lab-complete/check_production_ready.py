@@ -8,8 +8,6 @@ Output: checklist với ✅ / ❌ cho từng item.
 """
 import os
 import sys
-import json
-import subprocess
 
 
 def check(name: str, passed: bool, detail: str = "") -> dict:
@@ -46,7 +44,6 @@ def run_checks():
     print("\n🔒 Security")
 
     # Check .env not tracked
-    env_file = os.path.join(base, ".env")
     gitignore = os.path.join(base, ".gitignore")
     root_gitignore = os.path.join(base, "..", ".gitignore")
 

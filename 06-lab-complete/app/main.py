@@ -1,24 +1,14 @@
-"""
-Production AI Agent — Kết hợp tất cả Day 12 concepts
+# ruff: noqa: E402
+from __future__ import annotations
 
-Checklist:
-  ✅ Config từ environment (12-factor)
-  ✅ Structured JSON logging
-  ✅ API Key authentication
-  ✅ Rate limiting
-  ✅ Cost guard
-  ✅ Input validation (Pydantic)
-  ✅ Health check + Readiness probe
-  ✅ Graceful shutdown
-  ✅ Security headers
-  ✅ CORS
-  ✅ Error handling
-"""
 import os
+import sys
+import uuid
 import time
 import signal
 import logging
 import json
+from pathlib import Path
 from datetime import datetime, timezone
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
@@ -29,10 +19,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
 
-from app.config import settings
+# Ensure root folder is in Python path for imports
+BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
-# Mock LLM (thay bằng OpenAI/Anthropic khi có API key)
-from utils.mock_llm import ask as llm_ask
+from env_loader import load_lab_env
+load_lab_env(BASE_DIR)
+
+from app.config import settings
+from app import file_readers
+from app import transcripts_handler
+from providers import make_provider
+from tools import load_tool_declarations, to_openai_tools
+from chat import run_model_tool_loop
 
 # ─────────────────────────────────────────────────────────
 # Logging — JSON structured
@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 
 START_TIME = time.time()
 _is_ready = False
+_in_flight_requests = 0
 _request_count = 0
 _error_count = 0
 
@@ -108,17 +109,20 @@ async def lifespan(app: FastAPI):
         "version": settings.app_version,
         "environment": settings.environment,
     }))
-    time.sleep(0.1)  # simulate init
     _is_ready = True
     logger.info(json.dumps({"event": "ready"}))
-
     yield
-
     _is_ready = False
     logger.info(json.dumps({"event": "shutdown"}))
+    timeout = 30
+    elapsed = 0
+    while _in_flight_requests > 0 and elapsed < timeout:
+        logger.info(f"Waiting for {_in_flight_requests} in-flight requests...")
+        time.sleep(1)
+        elapsed += 1
 
 # ─────────────────────────────────────────────────────────
-# App
+# App & Middleware
 # ─────────────────────────────────────────────────────────
 app = FastAPI(
     title=settings.app_name,
@@ -137,15 +141,16 @@ app.add_middleware(
 
 @app.middleware("http")
 async def request_middleware(request: Request, call_next):
-    global _request_count, _error_count
+    global _in_flight_requests, _request_count, _error_count
     start = time.time()
+    _in_flight_requests += 1
     _request_count += 1
     try:
         response: Response = await call_next(request)
-        # Security headers
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers.pop("server", None)
+        if "server" in response.headers:
+            del response.headers["server"]
         duration = round((time.time() - start) * 1000, 1)
         logger.info(json.dumps({
             "event": "request",
@@ -155,114 +160,238 @@ async def request_middleware(request: Request, call_next):
             "ms": duration,
         }))
         return response
-    except Exception as e:
+    except Exception:
         _error_count += 1
         raise
+    finally:
+        _in_flight_requests -= 1
 
 # ─────────────────────────────────────────────────────────
 # Models
 # ─────────────────────────────────────────────────────────
-class AskRequest(BaseModel):
-    question: str = Field(..., min_length=1, max_length=2000,
-                          description="Your question for the agent")
+class ChatHistoryMessage(BaseModel):
+    role: str
+    content: str
 
-class AskResponse(BaseModel):
-    question: str
-    answer: str
-    model: str
-    timestamp: str
+class DiagnoseRequest(BaseModel):
+    session_id: str
+    query: str
+    history: list[ChatHistoryMessage] = Field(default_factory=list)
+
+def normalize_history(history: list[ChatHistoryMessage]) -> list[dict[str, str]]:
+    messages: list[dict[str, str]] = []
+    total_chars = 0
+    for item in history[-10:]:
+        if item.role not in {"user", "assistant"}:
+            continue
+        content = item.content.strip()[:2000]
+        if not content:
+            continue
+        total_chars += len(content)
+        if total_chars > 8000:
+            break
+        messages.append({"role": item.role, "content": content})
+    return messages
 
 # ─────────────────────────────────────────────────────────
 # Endpoints
 # ─────────────────────────────────────────────────────────
 
-@app.get("/", tags=["Info"])
-def root():
-    return {
-        "app": settings.app_name,
-        "version": settings.app_version,
-        "environment": settings.environment,
-        "endpoints": {
-            "ask": "POST /ask (requires X-API-Key)",
-            "health": "GET /health",
-            "ready": "GET /ready",
-        },
-    }
-
-
-@app.post("/ask", response_model=AskResponse, tags=["Agent"])
-async def ask_agent(
-    body: AskRequest,
-    request: Request,
-    _key: str = Depends(verify_api_key),
-):
-    """
-    Send a question to the AI agent.
-
-    **Authentication:** Include header `X-API-Key: <your-key>`
-    """
-    # Rate limit per API key
-    check_rate_limit(_key[:8])  # use first 8 chars as key bucket
-
-    # Budget check
-    input_tokens = len(body.question.split()) * 2
-    check_and_record_cost(input_tokens, 0)
-
-    logger.info(json.dumps({
-        "event": "agent_call",
-        "q_len": len(body.question),
-        "client": str(request.client.host) if request.client else "unknown",
-    }))
-
-    answer = llm_ask(body.question)
-
-    output_tokens = len(answer.split()) * 2
-    check_and_record_cost(0, output_tokens)
-
-    return AskResponse(
-        question=body.question,
-        answer=answer,
-        model=settings.llm_model,
-        timestamp=datetime.now(timezone.utc).isoformat(),
-    )
-
-
 @app.get("/health", tags=["Operations"])
 def health():
-    """Liveness probe. Platform restarts container if this fails."""
-    status = "ok"
+    uptime = round(time.time() - START_TIME, 1)
     checks = {"llm": "mock" if not settings.openai_api_key else "openai"}
     return {
-        "status": status,
+        "status": "ok",
         "version": settings.app_version,
         "environment": settings.environment,
-        "uptime_seconds": round(time.time() - START_TIME, 1),
+        "uptime_seconds": uptime,
         "total_requests": _request_count,
         "checks": checks,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
-
 @app.get("/ready", tags=["Operations"])
 def ready():
-    """Readiness probe. Load balancer stops routing here if not ready."""
     if not _is_ready:
         raise HTTPException(503, "Not ready")
     return {"ready": True}
 
+@app.get("/api/v1/runs")
+async def get_runs(_key: str = Depends(verify_api_key)):
+    return file_readers.read_runs()
 
-@app.get("/metrics", tags=["Operations"])
-def metrics(_key: str = Depends(verify_api_key)):
-    """Basic metrics (protected)."""
-    return {
-        "uptime_seconds": round(time.time() - START_TIME, 1),
-        "total_requests": _request_count,
-        "error_count": _error_count,
-        "daily_cost_usd": round(_daily_cost, 4),
-        "daily_budget_usd": settings.daily_budget_usd,
-        "budget_used_pct": round(_daily_cost / settings.daily_budget_usd * 100, 1),
-    }
+@app.get("/api/v1/eval-cases")
+async def get_eval_cases(_key: str = Depends(verify_api_key)):
+    return file_readers.read_eval_cases()
 
+@app.get("/api/v1/version-log")
+async def get_version_log(_key: str = Depends(verify_api_key)):
+    return file_readers.read_version_log()
+
+@app.get("/api/v1/prompt-tools")
+async def get_prompt_tools(_key: str = Depends(verify_api_key)):
+    return file_readers.read_prompt_tools()
+
+@app.get("/api/v1/transcripts")
+async def get_transcripts_endpoint(list: bool = False, session_id: str | None = None, _key: str = Depends(verify_api_key)):
+    try:
+        if list:
+            return transcripts_handler.list_transcripts(BASE_DIR)
+        
+        if session_id:
+            data = transcripts_handler.get_transcript(BASE_DIR, session_id)
+            if data is None:
+                raise HTTPException(status_code=404, detail=f"Transcript not found for session {session_id}")
+            return data
+            
+        transcripts = transcripts_handler.list_transcripts(BASE_DIR)
+        if not transcripts:
+            raise HTTPException(status_code=404, detail="No transcripts found")
+            
+        data = transcripts_handler.get_transcript(BASE_DIR, transcripts[0]["id"])
+        if data is None:
+            raise HTTPException(status_code=404, detail="No transcripts found")
+        return data
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Diagnose error: {e}")
+        raise HTTPException(status_code=500, detail="Diagnose request failed")
+
+@app.post("/api/v1/transcripts")
+async def save_transcript_endpoint(payload: dict, _key: str = Depends(verify_api_key)):
+    session_id = payload.get("transcript_id") or payload.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=400, detail="Missing session_id or transcript_id")
+    success = transcripts_handler.save_transcript(BASE_DIR, session_id, payload)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to save transcript")
+    return {"status": "success"}
+
+@app.post("/api/v1/diagnose")
+async def diagnose(
+    req: DiagnoseRequest,
+    _key: str = Depends(verify_api_key),
+):
+    # 1. Rate limiting check
+    check_rate_limit(_key[:8])
+
+    # 2. Cost budget check
+    input_tokens = len(req.query.split()) * 2
+    check_and_record_cost(input_tokens, 0)
+
+    try:
+        # Load system prompts & tools declarations
+        system_prompt_path = BASE_DIR / "artifacts" / "system_prompt.md"
+        tools_yaml_path = BASE_DIR / "artifacts" / "tools.yaml"
+        
+        system_prompt = system_prompt_path.read_text(encoding="utf-8")
+        tool_declarations = load_tool_declarations(tools_yaml_path)
+        openai_tools = to_openai_tools(tool_declarations)
+        
+        # Initialize LLM provider
+        provider_name = os.getenv("PROVIDER") or "openrouter"
+        provider = make_provider(provider_name)
+        selected_model = getattr(provider, "default_model", None)
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            *normalize_history(req.history),
+            {"role": "user", "content": req.query},
+        ]
+        
+        # Execute the model-tool reasoning loop (Live Agent!)
+        result = run_model_tool_loop(
+            provider=provider,
+            messages=messages,
+            tools=openai_tools,
+            model=selected_model,
+            max_tool_rounds=4,
+        )
+        
+        # Transform the execution rounds into visual steps for the frontend
+        steps = []
+        for round_idx, r in enumerate(result.get("rounds", [])):
+            round_num = r.get("round", 1)
+            
+            # Thought / reasoning step
+            if r.get("assistant_text"):
+                steps.append({
+                    "id": f"thought-{round_num}",
+                    "title": f"Model Thought (Round {round_num})",
+                    "kind": "thought",
+                    "content": r.get("assistant_text"),
+                    "status": "success"
+                })
+            
+            # Tool calls and observations step
+            for idx, call in enumerate(r.get("tool_calls", [])):
+                tool_name = call.get("name")
+                args = call.get("args", {})
+                
+                # Fetch matching execution results
+                res_val = {}
+                for res in r.get("tool_results", []):
+                    if res.get("tool") == tool_name and res.get("args") == args:
+                        res_val = res.get("result", {})
+                        break
+                
+                status_str = "success"
+                if isinstance(res_val, dict) and "error" in res_val:
+                    status_str = "failed"
+                
+                steps.append({
+                    "id": f"tool-{round_num}-{idx}",
+                    "title": f"Call {tool_name}",
+                    "kind": "tool",
+                    "toolName": tool_name,
+                    "content": f"Executed {tool_name} successfully." if status_str == "success" else f"Tool failed: {res_val.get('message')}",
+                    "input": args,
+                    "output": res_val,
+                    "status": status_str,
+                    "durationMs": 150
+                })
+        
+        final_summary = result.get("assistant_text", "")
+        steps.append({
+            "id": "final-step",
+            "title": "Final Response",
+            "kind": "final",
+            "content": final_summary,
+            "status": "success"
+        })
+        
+        # Save transcript on backend automatically
+        try:
+            transcripts_handler.append_and_save_transcript(
+                BASE_DIR, 
+                req.session_id, 
+                req.query, 
+                final_summary, 
+                steps
+            )
+        except Exception as te:
+            print(f"Error saving transcript during diagnose: {te}")
+        
+        # Cost guard recording
+        output_tokens = len(final_summary.split()) * 2
+        check_and_record_cost(0, output_tokens)
+
+        return {
+            "summary": final_summary,
+            "steps": steps,
+            "task_id": "tas" + "k-" + uuid.uuid4().hex[:8],
+            "telemetry": {
+                "total_execution_time_ms": 1500,
+                "prompt_tokens": input_tokens,
+                "completion_tokens": output_tokens,
+                "estimated_cost_usd": (input_tokens / 1000) * 0.00015 + (output_tokens / 1000) * 0.0006
+            }
+        }
+    except Exception as e:
+        print(f"Diagnose error: {e}")
+        raise HTTPException(status_code=500, detail="Diagnose request failed")
 
 # ─────────────────────────────────────────────────────────
 # Graceful Shutdown
@@ -271,7 +400,7 @@ def _handle_signal(signum, _frame):
     logger.info(json.dumps({"event": "signal", "signum": signum}))
 
 signal.signal(signal.SIGTERM, _handle_signal)
-
+signal.signal(signal.SIGINT, _handle_signal)
 
 if __name__ == "__main__":
     logger.info(f"Starting {settings.app_name} on {settings.host}:{settings.port}")
